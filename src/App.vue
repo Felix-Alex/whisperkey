@@ -1,160 +1,121 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-const greetMsg = ref("");
-const name = ref("");
+const router = useRouter()
+const currentRoute = ref(router.currentRoute.value.path)
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+const navItems = [
+  { path: '/settings/general', label: '通用', icon: '⚙' },
+  { path: '/settings/hotkey', label: '快捷键', icon: '⌨' },
+  { path: '/settings/providers', label: '服务商', icon: '☁' },
+  { path: '/settings/activation', label: '激活', icon: '🔑' },
+  { path: '/settings/history', label: '历史', icon: '📋' },
+  { path: '/settings/about', label: '关于', icon: 'ℹ' },
+]
+
+function navigate(path: string) {
+  currentRoute.value = path
+  router.push(path)
 }
 </script>
 
 <template>
-  <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
-
-    <div class="row">
-      <a href="https://vite.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
-    </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
-
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
-  </main>
+  <div class="app-shell">
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <h2>WhisperKey</h2>
+      </div>
+      <ul class="nav-list">
+        <li
+          v-for="item in navItems"
+          :key="item.path"
+          :class="{ active: currentRoute === item.path }"
+          @click="navigate(item.path)"
+        >
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span class="nav-label">{{ item.label }}</span>
+        </li>
+      </ul>
+    </nav>
+    <main class="content">
+      <router-view />
+    </main>
+  </div>
 </template>
 
-<style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
-}
-
-</style>
 <style>
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.container {
-  margin: 0;
-  padding-top: 10vh;
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #f5f5f5;
+  color: #333;
+  overflow: hidden;
+}
+
+.app-shell {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 180px;
+  background: #fff;
+  border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  text-align: center;
+  user-select: none;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
 }
 
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
+.sidebar-header h2 {
+  font-size: 16px;
+  font-weight: 600;
 }
 
-.row {
+.nav-list {
+  list-style: none;
+  padding: 8px;
+}
+
+.nav-list li {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+.nav-list li:hover {
+  background: #f0f0f0;
 }
 
-a:hover {
-  color: #535bf2;
+.nav-list li.active {
+  background: #e8f0fe;
+  color: #1a73e8;
 }
 
-h1 {
+.nav-icon {
+  font-size: 16px;
+  width: 20px;
   text-align: center;
 }
 
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+.content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
 }
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
-
 </style>
