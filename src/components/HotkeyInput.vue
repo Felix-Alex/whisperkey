@@ -1,12 +1,28 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const model = defineModel<string>()
-const isFocused = ref(false)
+const model = defineModel<string>({ default: 'Alt+J' })
+const capturing = ref(false)
+const errorMsg = ref('')
+
+const MODIFIER_KEYS = ['Control', 'Shift', 'Alt', 'Meta']
+
+function startCapture() {
+  capturing.value = true
+  errorMsg.value = ''
+}
 
 function onKeyDown(e: KeyboardEvent) {
-  if (!isFocused.value) return
+  if (!capturing.value) return
   e.preventDefault()
+
+  if (e.key === 'Escape') {
+    cancelCapture()
+    return
+  }
+
+  // Ignore modifier-only keydowns
+  if (MODIFIER_KEYS.includes(e.key)) return
 
   const keys: string[] = []
   if (e.ctrlKey) keys.push('Ctrl')
@@ -15,39 +31,79 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.metaKey) keys.push('Win')
 
   const keyName = e.key === ' ' ? 'Space' : e.key.length === 1 ? e.key.toUpperCase() : e.key
-  if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-    keys.push(keyName)
+  keys.push(keyName)
+
+  const totalKeys = keys.length
+  if (totalKeys < 2) {
+    errorMsg.value = '必须包含至少一个修饰键（Ctrl/Alt/Shift/Win）'
+    return
+  }
+  if (totalKeys > 3) {
+    errorMsg.value = '最多支持 3 键组合'
+    return
   }
 
-  if (keys.length >= 2) {
-    model.value = keys.join('+')
-  }
+  errorMsg.value = ''
+  model.value = keys.join('+')
+  capturing.value = false
+}
+
+function cancelCapture() {
+  capturing.value = false
+  errorMsg.value = ''
+}
+
+function onBlur() {
+  capturing.value = false
+  errorMsg.value = ''
 }
 </script>
 
 <template>
-  <input
-    :value="model"
-    type="text"
-    readonly
-    placeholder="点击后按下快捷键"
-    @focus="isFocused = true"
-    @blur="isFocused = false"
-    @keydown="onKeyDown"
-  />
+  <div>
+    <input
+      :value="capturing ? '请按下快捷键...' : (model || 'Alt+J')"
+      type="text"
+      readonly
+      :class="['hotkey-input', { capturing }]"
+      @focus="startCapture"
+      @blur="onBlur"
+      @keydown="onKeyDown"
+    />
+    <p v-if="errorMsg" class="error-text">{{ errorMsg }}</p>
+    <p v-else class="hint-text">点击输入框后按下快捷键组合（2-3 键，至少一个修饰键）</p>
+  </div>
 </template>
 
 <style scoped>
-input {
-  width: 220px;
-  padding: 6px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+.hotkey-input {
+  width: 260px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 500;
   cursor: pointer;
+  text-align: center;
+  background: var(--input-color, #fff);
+  color: var(--text-color, #333);
+  transition: border-color 0.15s, background 0.15s;
 }
-input:focus {
-  border-color: #1a73e8;
+.hotkey-input.capturing {
+  border-color: var(--primary-color, #1a73e8);
+  background: var(--primary-color-suppl, #e8f0fe);
+}
+.hotkey-input:focus {
   outline: none;
+}
+.error-text {
+  font-size: 12px;
+  color: #e53935;
+  margin-top: 4px;
+}
+.hint-text {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
 }
 </style>

@@ -1,24 +1,15 @@
 use rusqlite::{params, Connection};
 use crate::error::{AppError, AppResult};
-use crate::history::migrations::MIGRATIONS;
 
 pub struct HistoryDb {
-    conn: Connection,
+    pub conn: Connection,
 }
 
 impl HistoryDb {
     pub fn open(path: &std::path::Path) -> AppResult<Self> {
         let conn = Connection::open(path).map_err(|_| AppError::Internal)?;
-        let db = Self { conn };
-        db.run_migrations()?;
-        Ok(db)
-    }
-
-    fn run_migrations(&self) -> AppResult<()> {
-        for sql in MIGRATIONS {
-            self.conn.execute(sql, []).map_err(|_| AppError::Internal)?;
-        }
-        Ok(())
+        crate::history::migrations::run_migrations(&conn)?;
+        Ok(Self { conn })
     }
 
     pub fn add(&self, entry: &NewHistoryEntry) -> AppResult<i64> {

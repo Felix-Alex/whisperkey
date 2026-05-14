@@ -1,9 +1,11 @@
 use crate::error::AppResult;
 
-/// Encode i16 PCM samples to WAV bytes (16kHz, 16-bit, mono)
-pub fn encode_wav(samples: &[i16]) -> AppResult<Vec<u8>> {
+/// Encode i16 PCM samples to WAV bytes (16-bit, mono).
+/// `sample_rate` is the actual recording sample rate (e.g. 16000, 48000).
+pub fn encode_wav(samples: &[i16], sample_rate: u32) -> AppResult<Vec<u8>> {
     let data_size = (samples.len() * 2) as u32;
     let file_size = 36 + data_size;
+    let byte_rate = sample_rate * 2; // 1ch * 16bit = 2 bytes per sample
     let mut buf = Vec::with_capacity(44 + samples.len() * 2);
 
     // RIFF header
@@ -13,13 +15,13 @@ pub fn encode_wav(samples: &[i16]) -> AppResult<Vec<u8>> {
 
     // fmt chunk
     buf.extend_from_slice(b"fmt ");
-    buf.extend_from_slice(&16u32.to_le_bytes()); // chunk size (PCM)
-    buf.extend_from_slice(&1u16.to_le_bytes());  // audio format (PCM)
-    buf.extend_from_slice(&1u16.to_le_bytes());  // channels (mono)
-    buf.extend_from_slice(&16000u32.to_le_bytes()); // sample rate
-    buf.extend_from_slice(&32000u32.to_le_bytes()); // byte rate
-    buf.extend_from_slice(&2u16.to_le_bytes());  // block align
-    buf.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+    buf.extend_from_slice(&16u32.to_le_bytes());   // chunk size (PCM)
+    buf.extend_from_slice(&1u16.to_le_bytes());     // audio format (PCM)
+    buf.extend_from_slice(&1u16.to_le_bytes());     // channels (mono)
+    buf.extend_from_slice(&sample_rate.to_le_bytes());
+    buf.extend_from_slice(&byte_rate.to_le_bytes());
+    buf.extend_from_slice(&2u16.to_le_bytes());     // block align
+    buf.extend_from_slice(&16u16.to_le_bytes());    // bits per sample
 
     // data chunk
     buf.extend_from_slice(b"data");
@@ -37,20 +39,30 @@ mod tests {
 
     #[test]
     fn test_encode_empty() {
-        let wav = encode_wav(&[]).unwrap();
+        let wav = encode_wav(&[], 16000).unwrap();
         assert_eq!(wav.len(), 44);
     }
 
     #[test]
     fn test_encode_samples() {
         let samples: Vec<i16> = (0..16000).map(|i| (i % 1000) as i16).collect();
-        let wav = encode_wav(&samples).unwrap();
+        let wav = encode_wav(&samples, 16000).unwrap();
         assert_eq!(wav.len(), 44 + 32000);
     }
 
     #[test]
+    fn test_encode_48khz() {
+        let samples = vec![0i16; 48000];
+        let wav = encode_wav(&samples, 48000).unwrap();
+        assert_eq!(wav.len(), 44 + 96000);
+        // Verify sample rate field at offset 24..28
+        let rate = u32::from_le_bytes([wav[24], wav[25], wav[26], wav[27]]);
+        assert_eq!(rate, 48000);
+    }
+
+    #[test]
     fn test_wav_header() {
-        let wav = encode_wav(&[0i16; 100]).unwrap();
+        let wav = encode_wav(&[0i16; 100], 16000).unwrap();
         // RIFF header
         assert_eq!(&wav[0..4], b"RIFF");
         assert_eq!(&wav[8..12], b"WAVE");

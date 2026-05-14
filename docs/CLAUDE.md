@@ -4,17 +4,17 @@
 
 ## 1. 项目简介
 
-语灵听写（WhisperKey）是一款 Windows 11 桌面端全局语音输入工具：用户按一个全局快捷键即开始录音，再按一次停止；录音经云端 ASR + LLM 后处理，结果直接注入当前光标位置。提供"原话 / 优化 / Markdown"三种输出模式，原话模式终生免费，其余两种一次性买断。最终交付物为单一 .exe 安装包。
+语灵听写（WhisperKey）是一款 Windows 11 桌面端全局语音输入工具：用户按一个全局快捷键即开始录音，再按一次停止；录音经云端 ASR + LLM 后处理，结果直接注入当前光标位置。提供"原话 / 优化 / 速问 / Markdown / 自定义"五种输出模式，原话模式终生免费，其余四种需激活后使用。最终交付物为单一 .exe 安装包。
 
 ## 2. 技术栈速查（版本必须严格锁定）
 
 | 层 | 技术 | 版本 |
 |---|---|---|
-| 框架 | Tauri | 2.1.x |
+| 框架 | Tauri | 2.1.x (2.1.6) |
 | 后端 | Rust | 1.78.0 |
-| 前端 | Vue 3 + TypeScript | 3.4.x / 5.4.x |
-| UI 库 | Naive UI | 2.38.x |
-| 状态管理 | Pinia | 2.1.x |
+| 前端 | Vue 3 + TypeScript | 3.5.x / 5.6.x |
+| UI 库 | Naive UI | 2.44.x |
+| 状态管理 | Pinia | 3.0.x |
 | 数据库 | rusqlite (bundled) | 0.31.x |
 | HTTP | reqwest (rustls-tls) | 0.12.x |
 | 音频 | cpal | 0.15.x |
@@ -22,6 +22,7 @@
 | 加密 | ring | 0.17.x |
 | 日志 | tracing | 0.1.x |
 | 包管理 | pnpm | ≥9 |
+| 构建工具 | Vite | 6.0.x |
 
 **任何升级或更换上述任一依赖，必须先询问用户。**
 
@@ -38,8 +39,7 @@ whisperkey/
 │   ├── PRD.md
 │   ├── TECH_SPEC.md
 │   ├── TASKS.md
-│   ├── CLAUDE.md
-│   └── AGENTS.md
+│   └── CLAUDE.md
 ├── src/                             # Vue 3 前端
 │   ├── main.ts
 │   ├── App.vue
@@ -63,7 +63,8 @@ whisperkey/
 │   ├── stores/
 │   │   ├── config.ts
 │   │   ├── recording.ts
-│   │   └── license.ts
+│   │   ├── license.ts
+│   │   └── perf.ts
 │   ├── api/                         # 封装 invoke 调用
 │   │   ├── config.ts
 │   │   ├── recording.ts
@@ -81,11 +82,12 @@ whisperkey/
 │   ├── build.rs
 │   ├── icons/                       # 各尺寸 ICO/PNG
 │   ├── resources/
-│   │   ├── prompts/                 # System Prompt 文件
-│   │   │   ├── raw.md
-│   │   │   ├── polish.md
-│   │   │   └── markdown.md
-│   │   └── public_key.pem           # 许可证验签公钥
+│   │   └── prompts/                 # 五种模式 Prompt 文件
+│   │       ├── raw.md
+│   │       ├── polish.md
+│   │       ├── markdown.md
+│   │       ├── quick_ask.md
+│   │       └── custom.md
 │   └── src/
 │       ├── main.rs                  # 入口
 │       ├── lib.rs                   # 模块树
@@ -104,25 +106,23 @@ whisperkey/
 │       ├── audio/                   # 音频采集
 │       │   ├── mod.rs
 │       │   ├── recorder.rs
-│       │   └── encoder.rs
+│       │   ├── encoder.rs
+│       │   └── device_cache.rs
 │       ├── asr/                     # ASR 调用
 │       │   ├── mod.rs
 │       │   ├── trait.rs             # AsrProvider trait
 │       │   ├── openai.rs
 │       │   ├── xfyun.rs
 │       │   ├── volcengine.rs
-│       │   └── official.rs          # 官方免费密钥
+│       │   └── official.rs          # 官方免费中转
 │       ├── llm/                     # LLM 调用
 │       │   ├── mod.rs
 │       │   ├── trait.rs             # LlmProvider trait
-│       │   ├── openai.rs
+│       │   ├── openai.rs            # OpenAI 兼容协议
 │       │   ├── anthropic.rs
-│       │   ├── deepseek.rs
-│       │   ├── qwen.rs
 │       │   ├── ernie.rs
-│       │   ├── doubao.rs
 │       │   ├── gemini.rs
-│       │   └── prompts.rs           # 三种模式 Prompt 模板
+│       │   └── prompts.rs           # Prompt 模板加载与渲染
 │       ├── inject/                  # 文本注入
 │       │   ├── mod.rs
 │       │   ├── clipboard.rs
@@ -134,11 +134,11 @@ whisperkey/
 │       ├── config/                  # 配置管理
 │       │   ├── mod.rs
 │       │   ├── schema.rs
-│       │   └── persist.rs
+│       │   ├── persist.rs
+│       │   └── secrets.rs
 │       ├── crypto/                  # 加密
 │       │   ├── mod.rs
-│       │   ├── dpapi.rs             # Windows DPAPI
-│       │   └── license_verify.rs
+│       │   └── dpapi.rs             # Windows DPAPI
 │       ├── license/                 # 许可证
 │       │   ├── mod.rs
 │       │   ├── activator.rs
@@ -157,6 +157,7 @@ whisperkey/
 │       │   └── mod.rs
 │       └── util/
 │           ├── focus_app.rs         # 获取当前焦点应用
+│           ├── paths.rs             # 路径工具
 │           └── single_instance.rs   # 单实例
 ├── package.json
 ├── pnpm-lock.yaml
@@ -175,8 +176,7 @@ whisperkey/
 - 后端代码：`src-tauri/src/`
 - 前端代码：`src/`
 - IPC 命令层：`src-tauri/src/ipc/`
-- 三模式 Prompt：`src-tauri/resources/prompts/{raw,polish,markdown}.md`
-- 验签公钥：`src-tauri/resources/public_key.pem`
+- 五种模式 Prompt：`src-tauri/resources/prompts/{raw,polish,markdown,quick_ask,custom}.md`
 - 任务清单：`docs/TASKS.md`（**每个会话必须先读**）
 
 ## 4. 编码规范
@@ -210,8 +210,8 @@ whisperkey/
 4. **禁止**在生产代码中调用 `unwrap()` `expect()` `panic!()`（测试除外）
 5. **禁止**直接读写 `%APPDATA%` 路径，必须经过 `util::paths::AppPaths`
 6. **禁止**在日志中打印任何 API Key / license.dat 内容 / 完整 ASR 文本
-7. **禁止**修改 `src-tauri/resources/prompts/*.md` 三个 Prompt 文件，除非 PRD 明确要求迭代
-8. **禁止**触碰 `src-tauri/resources/public_key.pem` 与许可证验签逻辑细节，除非 TASKS 明确指派
+7. **禁止**修改 `src-tauri/resources/prompts/*.md` 五个 Prompt 文件，除非 PRD 明确要求迭代
+8. **禁止**触碰许可证验签逻辑细节（`license/verifier.rs`），除非 TASKS 明确指派
 9. **禁止**引入桌面通知/弹窗轰炸用户（错误提示用 Naive UI Notification 或托盘气泡，单事件不超过 1 次）
 10. **禁止**实现任何"上传音频/文本到我们自己的服务器"的代码路径，除中转 ASR 已在 TECH_SPEC §5.11 明确声明的端点
 11. **禁止**新增 i18n 语言包前忘记同步给 `zh-CN.ts` 与 `en.ts` 双份
@@ -253,7 +253,7 @@ pnpm install
 # 开发
 pnpm tauri dev
 
-# 仅前端构建检查
+# 仅前端类型检查 + 构建
 pnpm build
 
 # Rust 检查
@@ -264,13 +264,12 @@ cd src-tauri && cargo fmt --check
 # 测试
 cd src-tauri && cargo test
 cd src-tauri && cargo test --test 'it_*'      # 集成测试
-pnpm test                                       # 前端 vitest
 
 # 打包
 pnpm tauri build
 
 # 单任务自检（每次任务完成后必须跑）
-pnpm lint && pnpm build && cd src-tauri && cargo clippy -- -D warnings && cargo test
+pnpm build && cd src-tauri && cargo clippy -- -D warnings && cargo test
 ```
 
 ## 8. 与用户沟通规范

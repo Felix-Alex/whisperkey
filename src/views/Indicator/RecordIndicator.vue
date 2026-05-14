@@ -6,8 +6,10 @@ import { listen } from '@tauri-apps/api/event'
 const state = ref<IndicatorState>('Idle')
 const level = ref(0)
 const mode = ref('raw')
+const partialText = ref('')
 
 let unlisten: (() => void) | null = null
+let unlistenText: (() => void) | null = null
 
 onMounted(async () => {
   unlisten = await listen<{ state: IndicatorState; level: number; mode: string }>('indicator://state', (event) => {
@@ -15,10 +17,14 @@ onMounted(async () => {
     level.value = event.payload.level
     mode.value = event.payload.mode
   })
+  unlistenText = await listen<{ text: string; final?: boolean }>('asr-partial-text', (event) => {
+    partialText.value = event.payload.text
+  })
 })
 
 onUnmounted(() => {
   unlisten?.()
+  unlistenText?.()
 })
 </script>
 
@@ -30,6 +36,7 @@ onUnmounted(() => {
     </div>
     <div class="indicator-spinner" v-if="state === 'Processing'"></div>
     <span class="indicator-mode">{{ mode }}</span>
+    <span class="indicator-text" v-if="partialText && state === 'Recording'">{{ partialText }}</span>
   </div>
 </template>
 
@@ -87,5 +94,14 @@ onUnmounted(() => {
 }
 .indicator-mode {
   font-weight: 500;
+}
+.indicator-text {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ccc;
+  font-size: 11px;
+  margin-left: 4px;
 }
 </style>

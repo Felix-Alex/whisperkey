@@ -1,14 +1,16 @@
+export type OutputMode = 'raw' | 'polish' | 'markdown' | 'quick_ask' | 'custom'
+
 export interface Config {
   version: number
   hotkey: HotkeyConfig
-  modes: ModesConfig
+  llm: LlmConfig
   asr: AsrConfig
-  providers: ProvidersConfig
   audio: AudioConfig
   ui: UiConfig
   system: SystemConfig
   history: HistoryConfig
   advanced: AdvancedConfig
+  outputMode: OutputMode
 }
 
 export interface HotkeyConfig {
@@ -17,39 +19,25 @@ export interface HotkeyConfig {
   paused: boolean
 }
 
-export interface ModesConfig {
-  default: string
-  raw: ModeAssignment
-  polish: ModeAssignment
-  markdown: ModeAssignment
-}
-
-export interface ModeAssignment {
-  llmProvider: string
-  llmModel: string
+export interface LlmConfig {
+  provider: string
+  apiKey: string
+  apiKeyLen: number
+  apiSecret: string
+  apiSecretLen: number
+  baseUrl: string
+  model: string
 }
 
 export interface AsrConfig {
-  default: string
+  provider: string
+  apiKey: string
+  apiKeyLen: number
+  apiSecret: string
+  apiSecretLen: number
+  baseUrl: string
+  model: string
   language: string
-}
-
-export interface ProvidersConfig {
-  openai: ProviderCredential
-  anthropic: ProviderCredential
-  deepseek: ProviderCredential
-  qwen: ProviderCredential
-  ernie: ProviderCredential
-  doubao: ProviderCredential
-  gemini: ProviderCredential
-  xfyun: ProviderCredential
-  volcengine: ProviderCredential
-  official: Record<string, never>
-}
-
-export interface ProviderCredential {
-  apiKey?: string
-  baseUrl?: string
 }
 
 export interface AudioConfig {
@@ -91,17 +79,18 @@ export interface RecordingState {
 export interface HistoryItem {
   id: number
   createdAt: number
-  mode: string
+  mode: OutputMode
   rawText: string
   processedText: string
   durationMs: number
   appName?: string
+  asrProvider?: string
+  llmProvider?: string
   injected: boolean
 }
 
 export interface LicenseStatus {
   activated: boolean
-  products: string[]
   expiresAt?: number
 }
 

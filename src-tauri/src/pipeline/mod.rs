@@ -1,37 +1,48 @@
 pub mod state_machine;
 
-use tokio::sync::watch;
-use crate::pipeline::state_machine::{PipelineEvent, PipelineState, StateMachine};
+/// Encode recorded audio to WAV and run ASR.
+pub async fn transcribe_audio(
+    recorded: &crate::audio::recorder::RecordedAudio,
+    asr_registry: &crate::asr::AsrRegistry,
+    asr_config: &crate::config::schema::AsrConfig,
+) -> Result<String, crate::error::AppError> {
+    let wav_bytes = crate::audio::encoder::encode_wav(&recorded.samples, recorded.sample_rate)?;
 
-pub struct Pipeline {
-    state_machine: StateMachine,
-    state_tx: watch::Sender<PipelineState>,
-    pub state_rx: watch::Receiver<PipelineState>,
+    let provider = asr_registry
+        .get(&asr_config.provider)
+        .ok_or(crate::error::AppError::AsrAuth)?;
+
+    let resp = provider.transcribe(wav_bytes, asr_config).await?;
+    Ok(resp.text)
 }
 
-impl Pipeline {
-    pub fn new() -> Self {
-        let (state_tx, state_rx) = watch::channel(PipelineState::Idle);
-        Self {
-            state_machine: StateMachine::new(),
-            state_tx,
-            state_rx,
-        }
+/// Run LLM processing for non-raw modes.
+pub async fn process_with_llm(
+    text: &str,
+    mode: &crate::llm::r#trait::OutputMode,
+    llm_registry: &crate::llm::LlmRegistry,
+    llm_config: &crate::config::schema::LlmConfig,
+    license_store: &crate::license::LicenseStore,
+) -> Result<String, crate::error::AppError> {
+    // Gate: non-raw modes require activation
+    if mode.requires_llm() && !license_store.is_unlocked() {
+        return Err(crate::error::AppError::LicenseRequired);
     }
 
-    pub fn handle_event(&mut self, event: PipelineEvent) {
-        if let Some(new_state) = self.state_machine.transition(&event) {
-            let _ = self.state_tx.send(new_state);
-        }
-    }
+    let provider = llm_registry
+        .get(&llm_config.provider)
+        .ok_or(crate::error::AppError::LlmAuth)?;
 
-    pub fn state(&self) -> PipelineState {
-        self.state_machine.current_state()
-    }
-}
+    let system_prompt = crate::llm::prompts::render_prompt(mode, text);
 
-impl Default for Pipeline {
-    fn default() -> Self {
-        Self::new()
+    let result = provider
+        .chat(&system_prompt, text, &llm_config.api_key, &llm_config.base_url, &llm_config.model)
+        .await?;
+
+    // Polish mode: validate output length
+    if *mode == crate::llm::r#trait::OutputMode::Polish {
+        Ok(crate::llm::validate_polish_output(text, &result))
+    } else {
+        Ok(result)
     }
 }

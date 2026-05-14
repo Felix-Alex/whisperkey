@@ -1,10 +1,14 @@
 use serde::{Deserialize, Serialize};
 
+/// Pipeline states following the ASR + LLM two-step architecture.
+/// Raw mode skips LlmProcessing and goes directly from AsrTranscribing to Injecting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PipelineState {
     Idle,
     Recording,
-    Processing,
+    AsrTranscribing,
+    /// Only entered for non-raw modes (polish/markdown/quick_ask/custom)
+    LlmProcessing,
     Injecting,
     Error,
 }
@@ -12,9 +16,9 @@ pub enum PipelineState {
 #[derive(Debug, Clone)]
 pub enum PipelineEvent {
     HotkeyTriggered,
-    RecordingStopped { reason: crate::audio::StopReason },
-    AsrComplete { text: String, duration_ms: u64 },
-    LlmComplete { text: String, tokens: u64 },
+    RecordingStopped,
+    AsrComplete { text: String },
+    LlmComplete { text: String },
     InjectDone,
     Error { message: String },
 }
@@ -42,79 +46,74 @@ impl StateMachine {
 
     pub fn transition(&mut self, event: &PipelineEvent) -> Option<PipelineState> {
         let new_state = match (self.state, event) {
-            // Start recording from idle
             (PipelineState::Idle, PipelineEvent::HotkeyTriggered) => PipelineState::Recording,
 
-            // Stop recording -> processing
-            (PipelineState::Recording, PipelineEvent::RecordingStopped { .. }) => PipelineState::Processing,
+            (PipelineState::Recording, PipelineEvent::RecordingStopped) => {
+                PipelineState::AsrTranscribing
+            }
 
-            // ASR done -> stay in processing (waiting for LLM)
-            (PipelineState::Processing, PipelineEvent::AsrComplete { .. }) => PipelineState::Processing,
+            // Raw mode: ASR → Injecting (skip LLM)
+            (PipelineState::AsrTranscribing, PipelineEvent::AsrComplete { .. }) => {
+                // Caller decides whether to go to LlmProcessing or Injecting based on mode.
+                // Default transition: ASR → LLM. Raw mode handled externally.
+                PipelineState::LlmProcessing
+            }
 
-            // LLM done -> injecting
-            (PipelineState::Processing, PipelineEvent::LlmComplete { .. }) => PipelineState::Injecting,
+            (PipelineState::LlmProcessing, PipelineEvent::LlmComplete { .. }) => {
+                PipelineState::Injecting
+            }
 
-            // Inject done -> idle
             (PipelineState::Injecting, PipelineEvent::InjectDone) => PipelineState::Idle,
 
-            // Error from any state
             (_, PipelineEvent::Error { .. }) => PipelineState::Error,
 
-            // Error recovery -> idle
             (PipelineState::Error, _) => PipelineState::Idle,
 
-            // Invalid transition
             _ => return None,
         };
 
         self.state = new_state;
         Some(new_state)
     }
+
+    /// Force transition to Injecting (used by raw mode to skip LlmProcessing).
+    pub fn force_injecting(&mut self) -> PipelineState {
+        self.state = PipelineState::Injecting;
+        PipelineState::Injecting
+    }
+
+    /// Force transition to LlmProcessing (for non-raw modes after ASR).
+    pub fn force_llm_processing(&mut self) -> PipelineState {
+        self.state = PipelineState::LlmProcessing;
+        PipelineState::LlmProcessing
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::StopReason;
 
     #[test]
-    fn test_full_flow() {
+    fn test_full_flow_raw_mode() {
         let mut sm = StateMachine::new();
         assert_eq!(sm.current_state(), PipelineState::Idle);
 
-        // Start recording
+        // Hotkey → Recording
         assert_eq!(
             sm.transition(&PipelineEvent::HotkeyTriggered),
             Some(PipelineState::Recording)
         );
 
-        // Stop recording
+        // Stop → AsrTranscribing
         assert_eq!(
-            sm.transition(&PipelineEvent::RecordingStopped {
-                reason: StopReason::Manual
-            }),
-            Some(PipelineState::Processing)
+            sm.transition(&PipelineEvent::RecordingStopped),
+            Some(PipelineState::AsrTranscribing)
         );
 
-        // ASR complete
-        assert_eq!(
-            sm.transition(&PipelineEvent::AsrComplete {
-                text: "hello".into(),
-                duration_ms: 1000
-            }),
-            Some(PipelineState::Processing)
-        );
+        // Raw mode: force skip to Injecting
+        assert_eq!(sm.force_injecting(), PipelineState::Injecting);
 
-        // LLM complete
-        assert_eq!(
-            sm.transition(&PipelineEvent::LlmComplete {
-                text: "polished".into(),
-                tokens: 50
-            }),
-            Some(PipelineState::Injecting)
-        );
-
-        // Inject done
+        // Inject done → Idle
         assert_eq!(
             sm.transition(&PipelineEvent::InjectDone),
             Some(PipelineState::Idle)
@@ -122,15 +121,49 @@ mod tests {
     }
 
     #[test]
-    fn test_error_recovery() {
+    fn test_full_flow_llm_mode() {
         let mut sm = StateMachine::new();
+
+        sm.transition(&PipelineEvent::HotkeyTriggered);
+        sm.transition(&PipelineEvent::RecordingStopped);
+
+        // Default ASR → LlmProcessing
+        assert_eq!(
+            sm.transition(&PipelineEvent::AsrComplete {
+                text: "hello".into()
+            }),
+            Some(PipelineState::LlmProcessing)
+        );
+
+        // LLM completes → Injecting
+        assert_eq!(
+            sm.transition(&PipelineEvent::LlmComplete {
+                text: "polished".into()
+            }),
+            Some(PipelineState::Injecting)
+        );
+
+        // Inject done → Idle
+        assert_eq!(
+            sm.transition(&PipelineEvent::InjectDone),
+            Some(PipelineState::Idle)
+        );
+    }
+
+    #[test]
+    fn test_asr_failure() {
+        let mut sm = StateMachine::new();
+        sm.transition(&PipelineEvent::HotkeyTriggered);
+        sm.transition(&PipelineEvent::RecordingStopped);
+
         assert_eq!(
             sm.transition(&PipelineEvent::Error {
-                message: "test error".into()
+                message: "ASR timeout".into()
             }),
             Some(PipelineState::Error)
         );
-        // From error, any event goes to idle
+
+        // Error → Idle
         assert_eq!(
             sm.transition(&PipelineEvent::HotkeyTriggered),
             Some(PipelineState::Idle)
@@ -138,15 +171,27 @@ mod tests {
     }
 
     #[test]
+    fn test_llm_failure() {
+        let mut sm = StateMachine::new();
+        sm.transition(&PipelineEvent::HotkeyTriggered);
+        sm.transition(&PipelineEvent::RecordingStopped);
+        sm.transition(&PipelineEvent::AsrComplete {
+            text: "hello".into(),
+        });
+
+        // LLM fails
+        assert_eq!(
+            sm.transition(&PipelineEvent::Error {
+                message: "LLM auth error".into()
+            }),
+            Some(PipelineState::Error)
+        );
+    }
+
+    #[test]
     fn test_invalid_transition() {
         let mut sm = StateMachine::new();
-        // Can't go to processing from idle without recording
-        assert_eq!(
-            sm.transition(&PipelineEvent::AsrComplete {
-                text: "x".into(),
-                duration_ms: 0
-            }),
-            None
-        );
+        // Cannot inject from Idle
+        assert_eq!(sm.transition(&PipelineEvent::InjectDone), None);
     }
 }

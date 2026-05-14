@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use crate::asr::r#trait::{AsrProvider, AsrRequest, AsrResponse};
+use reqwest::multipart;
+
+use crate::asr::r#trait::{AsrProvider, AsrResponse};
+use crate::config::schema::AsrConfig;
 use crate::error::{AppError, AppResult};
 
 pub struct OpenAiAsr;
@@ -7,27 +10,31 @@ pub struct OpenAiAsr;
 #[async_trait]
 impl AsrProvider for OpenAiAsr {
     fn name(&self) -> &'static str {
-        "openai"
+        "OpenAI Whisper"
     }
 
-    async fn transcribe(&self, req: AsrRequest) -> AppResult<AsrResponse> {
-        let base_url = req.base_url.as_deref().unwrap_or("https://api.openai.com/v1");
-        let url = format!("{base_url}/audio/transcriptions");
-
-        let part = reqwest::multipart::Part::bytes(req.audio_wav)
+    async fn transcribe(&self, wav: Vec<u8>, config: &AsrConfig) -> AppResult<AsrResponse> {
+        let url = format!("{}/audio/transcriptions", config.base_url.trim_end_matches('/'));
+        let part = multipart::Part::bytes(wav)
             .file_name("audio.wav")
             .mime_str("audio/wav")
             .map_err(|_| AppError::Internal)?;
 
-        let form = reqwest::multipart::Form::new()
+        let form = multipart::Form::new()
             .part("file", part)
-            .text("model", "whisper-1")
-            .text("language", req.language.clone());
+            .text("model", config.model.clone())
+            .text("response_format", "json");
+
+        let form = if config.language != "auto" && !config.language.is_empty() {
+            form.text("language", config.language.clone())
+        } else {
+            form
+        };
 
         let client = reqwest::Client::new();
         let resp = client
             .post(&url)
-            .bearer_auth(&req.api_key)
+            .header("Authorization", format!("Bearer {}", config.api_key))
             .multipart(form)
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -40,27 +47,21 @@ impl AsrProvider for OpenAiAsr {
                 }
             })?;
 
-        let status = resp.status();
-        if status == 401 || status == 403 {
-            return Err(AppError::AsrAuth);
+        match resp.status().as_u16() {
+            200 => {
+                let body: serde_json::Value = resp.json().await.map_err(|_| AppError::Internal)?;
+                let text = body["text"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
+                Ok(AsrResponse {
+                    text,
+                    confidence: 0.0,
+                })
+            }
+            401 | 403 => Err(AppError::AsrAuth),
+            429 => Err(AppError::AsrQuota),
+            _ => Err(AppError::Network),
         }
-        if status == 429 {
-            return Err(AppError::AsrQuota);
-        }
-        if !status.is_success() {
-            // Retry once on server errors
-            return Err(AppError::Internal);
-        }
-
-        let body: serde_json::Value = resp.json().await.map_err(|_| AppError::Internal)?;
-        let text = body["text"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
-
-        Ok(AsrResponse {
-            text,
-            duration_ms: 0,
-        })
     }
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "WhisperKey",
-  "version": "0.1.0",
+  "version": "2.1.6",
   "identifier": "app.whisperkey",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -18,23 +18,10 @@
         "height": 600,
         "visible": true,
         "center": true
-      },
-      {
-        "label": "indicator",
-        "url": "/indicator",
-        "width": 200,
-        "height": 40,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "focus": false,
-        "visible": false,
-        "resizable": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.openai.com https://api.deepseek.com https://api.anthropic.com https://generativelanguage.googleapis.com https://aip.baidubce.com wss://openspeech.bytedance.com https://api.xfyun.cn https://raasr.xfyun.cn"
     }
   },
   "bundle": {
@@ -50,7 +37,10 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true,
+        "startMenuFolder": "语灵听写 WhisperKey"
       }
     }
   },

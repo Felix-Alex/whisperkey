@@ -1,5 +1,7 @@
 <script setup lang="ts">
-const version = '0.1.0'
+import { NButton, NText, NSpace, NDivider } from 'naive-ui'
+
+const version = '2.1.6'
 
 async function openLogs() {
   const { invoke } = await import('@tauri-apps/api/core')
@@ -8,27 +10,18 @@ async function openLogs() {
 </script>
 
 <template>
-  <div class="settings-page">
-    <h3>关于 WhisperKey</h3>
-    <div class="about-info">
-      <p><strong>版本：</strong>{{ version }}</p>
-      <p><strong>技术栈：</strong>Tauri 2 + Vue 3 + Rust</p>
-      <button @click="openLogs">打开日志文件夹</button>
-    </div>
+  <div>
+    <h3 style="margin-bottom: 16px; font-size: 16px; font-weight: 500">关于 WhisperKey</h3>
+
+    <NSpace vertical :size="8">
+      <NText>版本：{{ version }}</NText>
+      <NText depth="2" style="font-size: 13px">开发者：SuperAlex (hfli_07@126.com)</NText>
+      <NText depth="2" style="font-size: 13px">技术栈：Tauri 2 + Vue 3 + Naive UI + Rust</NText>
+      <NText depth="2" style="font-size: 13px">五种输出模式：原话 / 优化 / 速问 / Markdown / 自定义</NText>
+    </NSpace>
+
+    <NDivider />
+
+    <NButton @click="openLogs">打开日志文件夹</NButton>
   </div>
 </template>
-
-<style scoped>
-.settings-page h3 { margin-bottom: 16px; }
-.about-info p { margin-bottom: 8px; font-size: 14px; }
-button {
-  margin-top: 12px;
-  padding: 8px 16px;
-  background: #1a73e8;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-button:hover { background: #1557b0; }
-</style>

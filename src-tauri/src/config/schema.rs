@@ -8,11 +8,9 @@ pub struct Config {
     #[serde(default)]
     pub hotkey: HotkeyConfig,
     #[serde(default)]
-    pub modes: ModesConfig,
+    pub llm: LlmConfig,
     #[serde(default)]
     pub asr: AsrConfig,
-    #[serde(default)]
-    pub providers: ProvidersConfig,
     #[serde(default)]
     pub audio: AudioConfig,
     #[serde(default)]
@@ -23,28 +21,32 @@ pub struct Config {
     pub history: HistoryConfig,
     #[serde(default)]
     pub advanced: AdvancedConfig,
+    #[serde(default = "default_output_mode")]
+    pub output_mode: String,
 }
 
 fn default_version() -> u32 {
-    1
+    2
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: default_version(),
             hotkey: HotkeyConfig::default(),
-            modes: ModesConfig::default(),
+            llm: LlmConfig::default(),
             asr: AsrConfig::default(),
-            providers: ProvidersConfig::default(),
             audio: AudioConfig::default(),
             ui: UiConfig::default(),
             system: SystemConfig::default(),
             history: HistoryConfig::default(),
             advanced: AdvancedConfig::default(),
+            output_mode: default_output_mode(),
         }
     }
 }
+
+// ── Hotkey ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,166 +70,111 @@ impl Default for HotkeyConfig {
 }
 
 fn default_modifiers() -> Vec<String> {
-    vec!["Ctrl".into(), "Shift".into()]
+    vec!["Alt".into()]
 }
 
 fn default_key() -> String {
-    "Space".into()
+    "J".into()
 }
+
+// ── LLM (single global provider) ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ModesConfig {
-    #[serde(default = "default_mode")]
-    pub default: String,
-    #[serde(default)]
-    pub raw: ModeAssignment,
-    #[serde(default)]
-    pub polish: ModeAssignment,
-    #[serde(default)]
-    pub markdown: ModeAssignment,
+pub struct LlmConfig {
+    #[serde(default = "default_llm_provider")]
+    pub provider: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub api_key: String,
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub api_key_len: usize,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub api_secret: String,
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub api_secret_len: usize,
+    #[serde(default = "default_openai_base_url")]
+    pub base_url: String,
+    #[serde(default = "default_llm_model")]
+    pub model: String,
 }
 
-fn default_mode() -> String {
-    "raw".into()
-}
-
-impl Default for ModesConfig {
+impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            default: default_mode(),
-            raw: ModeAssignment {
-                llm_provider: "official".into(),
-                llm_model: "default".into(),
-            },
-            polish: ModeAssignment {
-                llm_provider: "deepseek".into(),
-                llm_model: "deepseek-chat".into(),
-            },
-            markdown: ModeAssignment {
-                llm_provider: "anthropic".into(),
-                llm_model: "claude-3-5-haiku-20241022".into(),
-            },
+            provider: default_llm_provider(),
+            api_key: String::new(),
+            api_key_len: 0,
+            api_secret: String::new(),
+            api_secret_len: 0,
+            base_url: default_openai_base_url(),
+            model: default_llm_model(),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModeAssignment {
-    pub llm_provider: String,
-    pub llm_model: String,
+fn default_llm_provider() -> String {
+    "openai".into()
 }
 
-impl Default for ModeAssignment {
-    fn default() -> Self {
-        Self {
-            llm_provider: "official".into(),
-            llm_model: "default".into(),
-        }
-    }
+fn default_llm_model() -> String {
+    "gpt-4o-mini".into()
 }
+
+// ── ASR ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AsrConfig {
     #[serde(default = "default_asr_provider")]
-    pub default: String,
+    pub provider: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub api_key: String,
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub api_key_len: usize,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub api_secret: String,
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub api_secret_len: usize,
+    #[serde(default = "default_openai_base_url")]
+    pub base_url: String,
+    #[serde(default = "default_asr_model")]
+    pub model: String,
     #[serde(default = "default_language")]
     pub language: String,
 }
 
+impl Default for AsrConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_asr_provider(),
+            api_key: String::new(),
+            api_key_len: 0,
+            api_secret: String::new(),
+            api_secret_len: 0,
+            base_url: default_openai_base_url(),
+            model: default_asr_model(),
+            language: default_language(),
+        }
+    }
+}
+
 fn default_asr_provider() -> String {
-    "official".into()
+    "openai".into()
+}
+
+fn default_asr_model() -> String {
+    "whisper-1".into()
 }
 
 fn default_language() -> String {
     "auto".into()
 }
 
-impl Default for AsrConfig {
-    fn default() -> Self {
-        Self {
-            default: default_asr_provider(),
-            language: default_language(),
-        }
-    }
+fn default_openai_base_url() -> String {
+    "https://api.openai.com/v1".into()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ProvidersConfig {
-    #[serde(default)]
-    pub openai: ProviderCredential,
-    #[serde(default)]
-    pub anthropic: ProviderCredential,
-    #[serde(default)]
-    pub deepseek: ProviderCredential,
-    #[serde(default)]
-    pub qwen: ProviderCredential,
-    #[serde(default)]
-    pub ernie: ErnieCredential,
-    #[serde(default)]
-    pub doubao: DoubaoCredential,
-    #[serde(default)]
-    pub gemini: ProviderCredential,
-    #[serde(default)]
-    pub xfyun: XfyunCredential,
-    #[serde(default)]
-    pub volcengine: VolcengineCredential,
-    #[serde(default)]
-    pub official: OfficialCredential,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderCredential {
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub api_key: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub base_url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ErnieCredential {
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub api_key: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub secret_key: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct DoubaoCredential {
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub api_key: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub endpoint_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct XfyunCredential {
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub app_id: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub api_key: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub api_secret: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct VolcengineCredential {
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub app_key: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub access_key: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct OfficialCredential {}
+// ── Audio ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -245,10 +192,10 @@ pub struct AudioConfig {
 impl Default for AudioConfig {
     fn default() -> Self {
         Self {
-            max_duration_sec: 60,
+            max_duration_sec: default_max_duration(),
             silence_auto_stop: false,
-            silence_timeout_ms: 3000,
-            input_device: "default".into(),
+            silence_timeout_ms: default_silence_timeout(),
+            input_device: default_input_device(),
         }
     }
 }
@@ -265,6 +212,8 @@ fn default_input_device() -> String {
     "default".into()
 }
 
+// ── UI ──
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfig {
@@ -279,9 +228,9 @@ pub struct UiConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
-            theme: "auto".into(),
-            language: "zh-CN".into(),
-            indicator_position: "bottom-center".into(),
+            theme: default_theme(),
+            language: default_lang(),
+            indicator_position: default_indicator_position(),
         }
     }
 }
@@ -297,6 +246,8 @@ fn default_lang() -> String {
 fn default_indicator_position() -> String {
     "bottom-center".into()
 }
+
+// ── System ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -323,6 +274,8 @@ fn default_true() -> bool {
     true
 }
 
+// ── History ──
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryConfig {
@@ -336,7 +289,7 @@ impl Default for HistoryConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            retention_days: 7,
+            retention_days: default_retention(),
         }
     }
 }
@@ -344,6 +297,8 @@ impl Default for HistoryConfig {
 fn default_retention() -> u32 {
     7
 }
+
+// ── Advanced ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -357,7 +312,7 @@ pub struct AdvancedConfig {
 impl Default for AdvancedConfig {
     fn default() -> Self {
         Self {
-            log_level: "info".into(),
+            log_level: default_log_level(),
             telemetry: false,
         }
     }
@@ -367,28 +322,48 @@ fn default_log_level() -> String {
     "info".into()
 }
 
+fn default_output_mode() -> String {
+    "raw".into()
+}
+
+fn is_zero_usize(n: &usize) -> bool {
+    *n == 0
+}
+
+// ── Tests ──
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_default_config_version_2() {
+        let cfg = Config::default();
+        assert_eq!(cfg.version, 2, "default config must be version 2");
+    }
 
     #[test]
     fn test_default_config_fields() {
         let cfg = Config::default();
         let json = serde_json::to_string_pretty(&cfg).unwrap();
 
-        // Verify key fields from TECH_SPEC §6.1 are present
-        assert!(json.contains("\"version\": 1"));
+        // v2 key fields
+        assert!(json.contains("\"version\": 2"));
         assert!(json.contains("\"modifiers\""));
-        assert!(json.contains("\"Ctrl\""));
-        assert!(json.contains("\"Shift\""));
-        assert!(json.contains("\"key\": \"Space\""));
-        assert!(json.contains("\"default\": \"raw\""));
+        assert!(json.contains("\"key\": \"J\""));
+        // LLM global config
+        assert!(json.contains("\"llm\""));
+        assert!(json.contains("\"provider\": \"openai\""));
+        assert!(json.contains("\"model\": \"gpt-4o-mini\""));
+        // ASR config
+        assert!(json.contains("\"asr\""));
+        assert!(json.contains("\"whisper-1\""));
+        assert!(json.contains("\"language\": \"auto\""));
+        // Other sections preserved
         assert!(json.contains("\"maxDurationSec\": 60"));
-        assert!(json.contains("\"silenceTimeoutMs\": 3000"));
         assert!(json.contains("\"theme\": \"auto\""));
-        assert!(json.contains("\"language\": \"zh-CN\""));
-        assert!(json.contains("\"logLevel\": \"info\""));
         assert!(json.contains("\"retentionDays\": 7"));
+        assert!(json.contains("\"logLevel\": \"info\""));
     }
 
     #[test]
@@ -396,11 +371,15 @@ mod tests {
         let cfg = Config::default();
         let json = serde_json::to_string(&cfg).unwrap();
         let parsed: Config = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.version, 1);
-        assert_eq!(parsed.hotkey.modifiers, vec!["Ctrl", "Shift"]);
-        assert_eq!(parsed.hotkey.key, "Space");
+        assert_eq!(parsed.version, 2);
+        assert_eq!(parsed.hotkey.modifiers, vec!["Alt"]);
+        assert_eq!(parsed.hotkey.key, "J");
+        assert_eq!(parsed.llm.provider, "openai");
+        assert_eq!(parsed.llm.model, "gpt-4o-mini");
+        assert_eq!(parsed.asr.provider, "openai");
+        assert_eq!(parsed.asr.model, "whisper-1");
+        assert_eq!(parsed.asr.language, "auto");
         assert_eq!(parsed.audio.max_duration_sec, 60);
-        assert_eq!(parsed.modes.default, "raw");
     }
 
     #[test]
@@ -418,21 +397,60 @@ mod tests {
         assert!(json.contains("checkUpdates"));
         assert!(json.contains("retentionDays"));
         assert!(json.contains("logLevel"));
-        // snake_case keys must NOT be present
+        // snake_case keys must NOT be present in serialized output
         assert!(!json.contains("max_duration_sec"));
-        assert!(!json.contains("silence_timeout_ms"));
-        assert!(!json.contains("log_level"));
+        assert!(!json.contains("indicator_position"));
     }
 
     #[test]
-    fn test_provider_camelcase_serialization() {
+    fn test_llm_config_camelcase() {
         let mut cfg = Config::default();
-        cfg.providers.openai.api_key = "test-key".into();
-        cfg.providers.openai.base_url = "https://test.com".into();
+        cfg.llm.api_key = "sk-test".into();
+        cfg.llm.base_url = "https://custom.api.com/v1".into();
         let json = serde_json::to_string(&cfg).unwrap();
         assert!(json.contains("apiKey"));
         assert!(json.contains("baseUrl"));
-        assert!(json.contains("llmProvider"));
-        assert!(json.contains("llmModel"));
+        // snake_case must not appear
+        assert!(!json.contains("api_key"));
+        assert!(!json.contains("base_url"));
+    }
+
+    #[test]
+    fn test_asr_config_camelcase() {
+        let mut cfg = Config::default();
+        cfg.asr.api_key = "asr-key".into();
+        let json = serde_json::to_string(&cfg).unwrap();
+        // ASR section uses camelCase
+        assert!(json.contains("\"asr\""));
+        assert!(json.contains("apiKey"));
+    }
+
+    #[test]
+    fn test_old_modes_and_providers_absent() {
+        let cfg = Config::default();
+        let json = serde_json::to_string_pretty(&cfg).unwrap();
+        // These old v1 keys must NOT appear
+        assert!(!json.contains("modes"));
+        assert!(!json.contains("providers"));
+        assert!(!json.contains("ModeAssignment"));
+        assert!(!json.contains("llmProvider"));
+        assert!(!json.contains("llmModel"));
+    }
+
+    #[test]
+    fn test_empty_api_key_skipped() {
+        let cfg = Config::default();
+        let json = serde_json::to_string(&cfg).unwrap();
+        // Default empty apiKey should be skipped (clean JSON)
+        assert!(!json.contains("\"apiKey\": \"\""));
+    }
+
+    #[test]
+    fn test_can_deserialize_minimal_v2_json() {
+        let minimal = r#"{"version":2}"#;
+        let cfg: Config = serde_json::from_str(minimal).unwrap();
+        assert_eq!(cfg.version, 2);
+        assert_eq!(cfg.llm.provider, "openai");
+        assert_eq!(cfg.asr.language, "auto");
     }
 }

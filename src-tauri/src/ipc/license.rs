@@ -1,45 +1,39 @@
 use serde::{Deserialize, Serialize};
+use tauri::State;
+use crate::app_state::AppState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LicenseStatus {
     pub activated: bool,
-    pub products: Vec<String>,
-    pub expires_at: Option<u64>,
 }
 
 #[tauri::command]
-pub async fn cmd_license_status() -> Result<LicenseStatus, String> {
+pub async fn cmd_license_status(state: State<'_, AppState>) -> Result<LicenseStatus, String> {
     Ok(LicenseStatus {
-        activated: false,
-        products: vec![],
-        expires_at: None,
+        activated: state.license_store.is_unlocked(),
     })
 }
 
 #[tauri::command]
-pub async fn cmd_license_activate(code: String) -> Result<LicenseStatus, String> {
-    let _ = code;
+pub async fn cmd_license_activate(
+    code: String,
+    state: State<'_, AppState>,
+) -> Result<LicenseStatus, String> {
+    state.license_store.activate(&code).map_err(|e| e.to_string())?;
     Ok(LicenseStatus {
-        activated: true,
-        products: vec!["polish".into(), "markdown".into()],
-        expires_at: None,
+        activated: state.license_store.is_unlocked(),
     })
 }
 
 #[tauri::command]
-pub async fn cmd_license_unbind() -> Result<(), String> {
+pub async fn cmd_app_quit(app: tauri::AppHandle) -> Result<(), String> {
+    app.exit(0);
     Ok(())
-}
-
-#[tauri::command]
-pub async fn cmd_app_quit() -> Result<(), String> {
-    std::process::exit(0);
 }
 
 #[tauri::command]
 pub async fn cmd_app_open_logs_folder() -> Result<(), String> {
     let logs_dir = crate::util::paths::AppPaths::new().logs_dir;
-    // Open logs folder in File Explorer
     std::process::Command::new("explorer")
         .arg(logs_dir)
         .spawn()

@@ -1,9 +1,23 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
+import { NButton, NText, NSpace, useMessage } from 'naive-ui'
+import HotkeyInput from '../../components/HotkeyInput.vue'
 import { useConfigStore } from '../../stores/config'
 
 const store = useConfigStore()
-const hotkeyStr = ref('Ctrl+Shift+Space')
+const message = useMessage()
+const hotkeyStr = ref('Alt+J')
+const dirty = ref(false)
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (dirty.value) {
+    const answer = window.confirm('有未保存的快捷键更改，确定离开吗？')
+    if (!answer) return next(false)
+    dirty.value = false
+  }
+  next()
+})
 
 onMounted(async () => {
   await store.load()
@@ -14,37 +28,41 @@ onMounted(async () => {
 
 async function saveHotkey() {
   const parts = hotkeyStr.value.split('+').map(s => s.trim())
-  const key = parts.pop() || 'Space'
-  await store.save({ hotkey: { modifiers: parts, key, paused: false } } as any)
+  const key = parts.pop() || 'J'
+  const modifiers = parts
+  if (modifiers.length === 0) {
+    message.error('快捷键必须包含至少一个修饰键（Ctrl/Alt/Shift/Win）')
+    return
+  }
+  if (modifiers.length + 1 > 3) {
+    message.error('最多支持 3 键组合')
+    return
+  }
+
+  try {
+    if (!store.config) return
+    store.config.hotkey.modifiers = modifiers
+    store.config.hotkey.key = key
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('cmd_config_set', { config: store.config })
+    await invoke('cmd_config_save')
+    await invoke('cmd_hotkey_restart')
+    dirty.value = false
+    message.success('快捷键已保存并生效')
+  } catch (e: any) {
+    message.error(typeof e === 'string' ? e : '保存失败')
+  }
 }
 </script>
 
 <template>
-  <div class="settings-page">
-    <h3>快捷键设置</h3>
-    <div class="setting-group">
-      <label class="setting-label">快捷键</label>
-      <input
-        v-model="hotkeyStr"
-        type="text"
-        placeholder="例如: Ctrl+Shift+Space"
-        @change="saveHotkey"
-      />
-    </div>
-    <p class="hint">支持: Ctrl, Shift, Alt, Win + 字母/数字/F键/特殊键</p>
+  <div>
+    <h3 style="margin-bottom: 16px; font-size: 16px; font-weight: 500">快捷键设置</h3>
+
+    <NSpace vertical :size="12">
+      <NText depth="2">当前快捷键组合</NText>
+      <HotkeyInput v-model="hotkeyStr" @update:model-value="dirty = true" />
+      <NButton type="primary" @click="saveHotkey">保存快捷键</NButton>
+    </NSpace>
   </div>
 </template>
-
-<style scoped>
-.settings-page h3 { margin-bottom: 16px; }
-.setting-group { margin-bottom: 12px; }
-.setting-label { display: block; font-size: 14px; margin-bottom: 4px; }
-input[type="text"] {
-  width: 240px;
-  padding: 6px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-.hint { font-size: 12px; color: #888; margin-top: 8px; }
-</style>

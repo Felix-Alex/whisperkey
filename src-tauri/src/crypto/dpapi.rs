@@ -2,7 +2,7 @@ use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
 };
 
-const ENTROPY: &[u8] = b"WhisperKey-v1-Salt";
+const ENTROPY: &[u8] = b"WhisperKey-v2-Salt";
 
 fn make_blob(data: &[u8]) -> CRYPT_INTEGER_BLOB {
     CRYPT_INTEGER_BLOB {
@@ -20,6 +20,8 @@ fn make_entropy() -> CRYPT_INTEGER_BLOB {
 
 fn free_blob_data(blob: &CRYPT_INTEGER_BLOB) {
     if !blob.pbData.is_null() {
+        // SAFETY: pbData was allocated by CryptProtectData/CryptUnprotectData via LocalAlloc.
+        // LocalFree is the correct deallocator for DPAPI-allocated memory blocks.
         unsafe {
             windows::Win32::Foundation::LocalFree(windows::Win32::Foundation::HLOCAL(
                 blob.pbData as *mut core::ffi::c_void,
@@ -33,6 +35,11 @@ pub fn encrypt(plain: &[u8]) -> Vec<u8> {
     let entropy = make_entropy();
     let mut data_out = CRYPT_INTEGER_BLOB::default();
 
+    // SAFETY:
+    // - data_in contains a valid pointer to `plain` bytes and correct length.
+    // - entropy contains a valid pointer to static ENTROPY bytes and correct length.
+    // - data_out is default-initialized; DPAPI allocates memory and writes the pointer + length.
+    // - All pointers remain valid for the duration of this call.
     unsafe {
         CryptProtectData(
             &data_in,
@@ -46,16 +53,27 @@ pub fn encrypt(plain: &[u8]) -> Vec<u8> {
         .expect("CryptProtectData failed");
     }
 
+    // SAFETY: data_out.pbData was allocated by CryptProtectData above, with cbData bytes.
+    // The pointer is non-null (guaranteed by the expect above) and the memory is initialized.
     let out = unsafe { std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize) }.to_vec();
     free_blob_data(&data_out);
     out
 }
 
 pub fn decrypt(cipher: &[u8]) -> Vec<u8> {
+    decrypt_result(cipher).expect("CryptUnprotectData failed")
+}
+
+pub fn decrypt_result(cipher: &[u8]) -> Result<Vec<u8>, String> {
     let data_in = make_blob(cipher);
     let entropy = make_entropy();
     let mut data_out = CRYPT_INTEGER_BLOB::default();
 
+    // SAFETY:
+    // - data_in contains a valid pointer to `cipher` bytes and correct length.
+    // - entropy contains a valid pointer to static ENTROPY bytes and correct length.
+    // - data_out is default-initialized; DPAPI allocates memory and writes the pointer + length.
+    // - All pointers remain valid for the duration of this call.
     unsafe {
         CryptUnprotectData(
             &data_in,
@@ -66,12 +84,14 @@ pub fn decrypt(cipher: &[u8]) -> Vec<u8> {
             0,
             &mut data_out,
         )
-        .expect("CryptUnprotectData failed");
+        .map_err(|e| format!("DPAPI decrypt failed: {e}"))?;
     }
 
+    // SAFETY: data_out.pbData was allocated by CryptUnprotectData above, with cbData bytes.
+    // The pointer is non-null (guaranteed by the ? above) and the memory is initialized.
     let out = unsafe { std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize) }.to_vec();
     free_blob_data(&data_out);
-    out
+    Ok(out)
 }
 
 pub fn encrypt_str(plain: &str) -> String {

@@ -20,7 +20,7 @@ async function activate() {
 <template>
   <div class="dialog">
     <h3>激活 WhisperKey</h3>
-    <p>输入您的激活码以解锁 优化 和 Markdown 模式</p>
+    <p>输入激活码以解锁全部 LLM 输出模式</p>
     <input v-model="code" type="text" placeholder="激活码" />
     <button @click="activate">激活</button>
     <p v-if="message" class="msg">{{ message }}</p>

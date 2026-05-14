@@ -8,6 +8,7 @@ pub enum HotkeyEvent {
     RegisterFailed,
 }
 
+use crate::error::{AppError, AppResult};
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -96,6 +97,18 @@ impl HotkeyConfig {
 
         Some(Self { modifiers, key })
     }
+
+    /// Validate hotkey constraints: 2-3 keys, at least one modifier.
+    pub fn validate(&self) -> AppResult<()> {
+        let total_keys = self.modifiers.len() + 1; // +1 for the main key
+        if !(2..=3).contains(&total_keys) {
+            return Err(AppError::HotkeyInvalid);
+        }
+        if self.modifiers.is_empty() {
+            return Err(AppError::HotkeyInvalid);
+        }
+        Ok(())
+    }
 }
 
 impl fmt::Display for HotkeyConfig {
@@ -131,7 +144,7 @@ fn normalize_key(key: &str) -> String {
 }
 
 /// Map a key name string to Windows virtual key code
-fn key_to_vk(key: &str) -> u32 {
+pub fn key_to_vk(key: &str) -> u32 {
     match key.to_uppercase().as_str() {
         "SPACE" => 0x20,
         "ENTER" | "RETURN" => 0x0D,
@@ -153,6 +166,18 @@ fn key_to_vk(key: &str) -> u32 {
         "CAPSLOCK" => 0x14,
         "NUMLOCK" => 0x90,
         "SCROLLLOCK" => 0x91,
+        // ── Non-alphanumeric symbol keys (VK_OEM_*) ──
+        "`" | "~" => 0xC0,   // VK_OEM_3
+        "-" | "_" => 0xBD,   // VK_OEM_MINUS
+        "=" | "+" => 0xBB,   // VK_OEM_PLUS
+        "[" | "{" => 0xDB,   // VK_OEM_4
+        "]" | "}" => 0xDD,   // VK_OEM_6
+        "\\" | "|" => 0xDC,  // VK_OEM_5
+        ";" | ":" => 0xBA,   // VK_OEM_1
+        "'" | "\"" => 0xDE,  // VK_OEM_7
+        "," | "<" => 0xBC,   // VK_OEM_COMMA
+        "." | ">" => 0xBE,   // VK_OEM_PERIOD
+        "/" | "?" => 0xBF,   // VK_OEM_2
         s if s.starts_with('F') => {
             if let Ok(n) = s[1..].parse::<u32>() {
                 if (1..=24).contains(&n) {
@@ -255,5 +280,43 @@ mod tests {
         assert_eq!(key_to_vk("0"), 0x30);
         assert_eq!(key_to_vk("Enter"), 0x0D);
         assert_eq!(key_to_vk("Escape"), 0x1B);
+    }
+
+    #[test]
+    fn test_validate_two_key_with_modifier() {
+        let hk = HotkeyConfig::from_string("Alt+J").unwrap();
+        assert!(hk.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_three_key_with_modifier() {
+        let hk = HotkeyConfig::from_string("Ctrl+Shift+Space").unwrap();
+        assert!(hk.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_single_key_fails() {
+        // Cannot have just one key (no modifier)
+        let hk = HotkeyConfig::new(vec![], "Space");
+        assert!(hk.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_no_modifier_fails() {
+        // "A+B" parses A as modifier and B as key — A is not a valid modifier, so from_string returns None
+        assert!(HotkeyConfig::from_string("A+B").is_none());
+        // Explicit construction with no modifier
+        let hk = HotkeyConfig::new(vec![], "J");
+        assert!(hk.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_four_keys_fails() {
+        // Cannot have 4+ keys
+        let hk = HotkeyConfig::new(
+            vec![Modifier::Ctrl, Modifier::Shift, Modifier::Alt],
+            "Space",
+        );
+        assert!(hk.validate().is_err());
     }
 }

@@ -6,6 +6,9 @@ pub enum AppError {
     #[error("快捷键被占用，请重新设置")]
     HotkeyRegister,
 
+    #[error("快捷键必须包含至少一个修饰键（Ctrl/Alt/Shift/Win），且为 2-3 键组合")]
+    HotkeyInvalid,
+
     #[error("未检测到麦克风")]
     AudioDevice,
 
@@ -27,6 +30,9 @@ pub enum AppError {
     #[error("API Key 无效")]
     LlmAuth,
 
+    #[error("调用频率/配额超限")]
+    LlmQuota,
+
     #[error("已复制到剪贴板，请手动 Ctrl+V")]
     InjectFailed,
 
@@ -35,6 +41,9 @@ pub enum AppError {
 
     #[error("许可证不属于当前设备")]
     LicenseDevice,
+
+    #[error("该模式需激活后使用")]
+    LicenseRequired,
 
     #[error("网络连接失败")]
     Network,
@@ -47,6 +56,7 @@ impl AppError {
     pub fn code(&self) -> &'static str {
         match self {
             AppError::HotkeyRegister => "E_HOTKEY_REGISTER",
+            AppError::HotkeyInvalid => "E_HOTKEY_INVALID",
             AppError::AudioDevice => "E_AUDIO_DEVICE",
             AppError::AudioPermission => "E_AUDIO_PERMISSION",
             AppError::AsrTimeout => "E_ASR_TIMEOUT",
@@ -54,9 +64,11 @@ impl AppError {
             AppError::AsrQuota => "E_ASR_QUOTA",
             AppError::LlmTimeout => "E_LLM_TIMEOUT",
             AppError::LlmAuth => "E_LLM_AUTH",
+            AppError::LlmQuota => "E_LLM_QUOTA",
             AppError::InjectFailed => "E_INJECT_FAILED",
             AppError::LicenseInvalid => "E_LICENSE_INVALID",
             AppError::LicenseDevice => "E_LICENSE_DEVICE",
+            AppError::LicenseRequired => "E_LICENSE_REQUIRED",
             AppError::Network => "E_NETWORK",
             AppError::Internal => "E_INTERNAL",
         }
@@ -66,6 +78,7 @@ impl AppError {
         // thiserror::Error provides .to_string(), but for serialization we match
         match self {
             AppError::HotkeyRegister => "快捷键被占用，请重新设置",
+            AppError::HotkeyInvalid => "快捷键必须包含至少一个修饰键（Ctrl/Alt/Shift/Win），且为 2-3 键组合",
             AppError::AudioDevice => "未检测到麦克风",
             AppError::AudioPermission => "请到系统设置授予麦克风权限",
             AppError::AsrTimeout => "识别超时，请检查网络",
@@ -73,9 +86,11 @@ impl AppError {
             AppError::AsrQuota => "调用频率/配额超限",
             AppError::LlmTimeout => "AI 处理超时",
             AppError::LlmAuth => "API Key 无效",
+            AppError::LlmQuota => "调用频率/配额超限",
             AppError::InjectFailed => "已复制到剪贴板，请手动 Ctrl+V",
             AppError::LicenseInvalid => "激活码无效",
             AppError::LicenseDevice => "许可证不属于当前设备",
+            AppError::LicenseRequired => "该模式需激活后使用",
             AppError::Network => "网络连接失败",
             AppError::Internal => "内部错误，请查看日志",
         }
@@ -112,6 +127,7 @@ mod tests {
     fn test_all_error_variants_serialize_to_code_message() {
         let variants: Vec<AppError> = vec![
             AppError::HotkeyRegister,
+            AppError::HotkeyInvalid,
             AppError::AudioDevice,
             AppError::AudioPermission,
             AppError::AsrTimeout,
@@ -119,9 +135,11 @@ mod tests {
             AppError::AsrQuota,
             AppError::LlmTimeout,
             AppError::LlmAuth,
+            AppError::LlmQuota,
             AppError::InjectFailed,
             AppError::LicenseInvalid,
             AppError::LicenseDevice,
+            AppError::LicenseRequired,
             AppError::Network,
             AppError::Internal,
         ];

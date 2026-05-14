@@ -1,26 +1,26 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { LicenseStatus } from '../types'
 
 export const useLicenseStore = defineStore('license', () => {
-  const status = ref<LicenseStatus>({
-    activated: false,
-    products: [],
-  })
+  const activated = ref(false)
+  const loading = ref(false)
 
   async function refresh() {
     const { invoke } = await import('@tauri-apps/api/core')
-    status.value = await invoke<LicenseStatus>('cmd_license_status')
+    const result = await invoke<{ activated: boolean }>('cmd_license_status')
+    activated.value = result.activated
   }
 
   async function activate(code: string) {
-    const { invoke } = await import('@tauri-apps/api/core')
-    status.value = await invoke<LicenseStatus>('cmd_license_activate', { code })
+    loading.value = true
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const result = await invoke<{ activated: boolean }>('cmd_license_activate', { code })
+      activated.value = result.activated
+    } finally {
+      loading.value = false
+    }
   }
 
-  function isUnlocked(product: string): boolean {
-    return status.value.products.includes(product)
-  }
-
-  return { status, refresh, activate, isUnlocked }
+  return { activated, loading, refresh, activate }
 })

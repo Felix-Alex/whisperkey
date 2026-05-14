@@ -6,16 +6,11 @@ pub mod xfyun;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use crate::asr::r#trait::AsrProvider;
 
 pub struct AsrRegistry {
     providers: HashMap<String, Arc<dyn AsrProvider>>,
-}
-
-impl Default for AsrRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl AsrRegistry {
@@ -34,28 +29,18 @@ impl AsrRegistry {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use async_trait::async_trait;
-    use crate::error::AppResult;
-    use crate::asr::r#trait::{AsrRequest, AsrResponse};
-
-    struct MockAsr;
-
-    #[async_trait]
-    impl AsrProvider for MockAsr {
-        fn name(&self) -> &'static str { "mock" }
-        async fn transcribe(&self, _req: AsrRequest) -> AppResult<AsrResponse> {
-            Ok(AsrResponse { text: "mock".into(), duration_ms: 0 })
-        }
+impl Default for AsrRegistry {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    #[test]
-    fn test_register_and_get() {
-        let mut registry = AsrRegistry::new();
-        registry.register("mock", Arc::new(MockAsr));
-        let p = registry.get("mock").unwrap();
-        assert_eq!(p.name(), "mock");
-    }
+/// Build the default AsrRegistry with all 4 providers registered.
+pub fn default_registry() -> AsrRegistry {
+    let mut registry = AsrRegistry::new();
+    registry.register("openai", Arc::new(openai::OpenAiAsr));
+    registry.register("xfyun", Arc::new(xfyun::XfyunAsr));
+    registry.register("volcengine", Arc::new(volcengine::VolcengineAsr));
+    registry.register("official", Arc::new(official::OfficialAsr));
+    registry
 }

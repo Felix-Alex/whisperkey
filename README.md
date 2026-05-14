@@ -1,7 +1,94 @@
-# Tauri + Vue + TypeScript
+# 语灵听写 WhisperKey
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Windows 11 桌面端全局语音输入工具。按下快捷键开始录音，再按一次停止，语音经云端 ASR 识别和 AI 优化后，直接注入当前光标位置。
 
-## Recommended IDE Setup
+## 系统要求
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+| 项 | 最低要求 |
+|---|---|
+| 操作系统 | Windows 10 22H2+ / Windows 11 |
+| 架构 | x64 / ARM64 |
+| 内存 | 4 GB |
+| 磁盘 | 100 MB |
+| 网络 | 需联网调用 ASR / LLM API |
+
+## 安装
+
+1. 下载 `WhisperKey_Setup_<version>_x64.exe`
+2. 双击安装（无需管理员权限，安装到 `%LOCALAPPDATA%\Programs\WhisperKey`）
+3. 首次启动后，右键托盘图标进入"设置"
+4. 配置 LLM 和 ASR 服务商 API Key
+5. 开始使用
+
+## 五种输出模式
+
+| 模式 | 快捷键后 | 说明 |
+|------|---------|------|
+| **原话模式** | ASR → 直接输出 | 语音转文字，不经过 AI，终生免费 |
+| **优化模式** | ASR → LLM 润色 | 去除口语词，优化为书面语言 |
+| **速问模式** | ASR → LLM 回答 | 语音提问，AI 快速给出答案 |
+| **Markdown 模式** | ASR → LLM 生成 | 口述需求转为结构化 AI 提示词 |
+| **自定义模式** | ASR → 自定义 Prompt | 使用自设 prompt 处理语音结果 |
+
+原话模式终生免费，其余四种模式需激活后使用。
+
+## 快捷键
+
+默认快捷键：`Alt + J`
+
+可在"设置 → 快捷键"中自定义，支持 2-3 键组合（必须包含至少一个修饰键 Ctrl/Alt/Shift/Win）。
+
+## 服务商配置
+
+### LLM（AI 后处理）
+- OpenAI / DeepSeek / 通义千问 / 豆包 — OpenAI 兼容协议
+- Anthropic Claude / Google Gemini / 百度文心一言
+
+### ASR（语音识别）
+- OpenAI Whisper / 讯飞极速听写 / 火山引擎语音 / WhisperKey 官方中转
+
+在"设置 → 服务商"中填入 API Key 并保存，可使用"测试连接"按钮验证。
+
+## 历史记录
+
+所有录音识别结果自动保存，可在"设置 → 历史"中查看、搜索、复制、删除。默认保留 7 天。
+
+## 激活
+
+- 在"设置 → 激活"中输入 6 位激活码
+- 未激活状态下，仅原话模式可用
+- 激活后解锁全部五种输出模式
+
+## 常见问题
+
+**Q: 按下快捷键无反应？**
+A: 检查快捷键是否被其他软件占用，尝试更换组合键。
+
+**Q: 录音后无文字输出？**
+A: 检查麦克风权限（Windows 设置 → 隐私 → 麦克风），确认 ASR API Key 有效。
+
+**Q: LLM 模式返回错误？**
+A: 检查 LLM API Key 和配额。非原话模式需要激活。
+
+**Q: 如何卸载？**
+A: 通过 Windows 设置 → 应用，或运行安装目录下的 `uninstall.exe`。卸载时可选保留配置和历史。
+
+**Q: SmartScreen 弹出"未知发布者"？**
+A: V1.0 使用自签名，点击"更多信息 → 仍要运行"即可。后续版本将使用 EV 代码签名证书消除此提示。
+
+## 技术栈
+
+Tauri 2 + Vue 3 + Naive UI + Rust
+
+## 开发
+
+```bash
+pnpm install
+pnpm tauri dev       # 开发模式
+pnpm tauri build     # 生产构建
+cargo test           # 运行测试
+```
+
+## License
+
+专有软件。原话模式终生免费，其余模式需激活使用。

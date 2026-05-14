@@ -1,64 +1,58 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { NButton, NInput, NText, NSpace, useMessage } from 'naive-ui'
 import { useLicenseStore } from '../../stores/license'
 
 const licenseStore = useLicenseStore()
+const message = useMessage()
 const code = ref('')
 
-onMounted(() => licenseStore.refresh())
+onMounted(async () => {
+  await licenseStore.refresh()
+})
 
-async function activate() {
-  if (code.value.trim()) {
+async function handleActivate() {
+  if (!code.value.trim()) {
+    message.warning('请输入激活码')
+    return
+  }
+  try {
     await licenseStore.activate(code.value.trim())
-    code.value = ''
+    message.success('激活成功')
+  } catch (e: any) {
+    message.error(typeof e === 'string' ? e : '激活失败')
   }
 }
 </script>
 
 <template>
-  <div class="settings-page">
-    <h3>激活</h3>
+  <div>
+    <h3 style="margin-bottom: 16px; font-size: 16px; font-weight: 500">激活许可证</h3>
 
-    <div class="status-card">
-      <p>
-        当前状态：
-        <span :class="licenseStore.status.activated ? 'active' : 'inactive'">
-          {{ licenseStore.status.activated ? '已激活' : '未激活' }}
-        </span>
-      </p>
-      <p v-if="licenseStore.status.products.length">
-        已解锁：{{ licenseStore.status.products.join(', ') }}
-      </p>
-    </div>
+    <template v-if="licenseStore.activated">
+      <NText type="success" style="font-size: 15px">
+        恭喜您，解锁了所有的输出模式。
+      </NText>
+    </template>
 
-    <div class="activate-form">
-      <input v-model="code" type="text" placeholder="输入激活码" />
-      <button @click="activate">激活</button>
-    </div>
+    <template v-else>
+      <NText depth="2" style="margin-bottom: 16px; display: block">
+        未激活状态下，仅"原话模式"可用。
+      </NText>
+
+      <NSpace vertical :size="12" style="margin-top: 16px">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <NInput
+            v-model:value="code"
+            maxlength="6"
+            style="width: 180px; font-family: monospace; font-size: 18px; letter-spacing: 4px; text-align: center"
+            placeholder=""
+          />
+          <NButton type="primary" :loading="licenseStore.loading" @click="handleActivate">
+            激活
+          </NButton>
+        </div>
+      </NSpace>
+    </template>
   </div>
 </template>
-
-<style scoped>
-.settings-page h3 { margin-bottom: 16px; }
-.status-card { margin-bottom: 16px; padding: 12px; background: #f9f9f9; border-radius: 8px; }
-.active { color: #2e7d32; font-weight: 600; }
-.inactive { color: #c62828; }
-.activate-form { display: flex; gap: 8px; }
-input[type="text"] {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-button {
-  padding: 8px 16px;
-  background: #1a73e8;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-button:hover { background: #1557b0; }
-</style>
